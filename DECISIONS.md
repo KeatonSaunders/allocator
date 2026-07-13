@@ -216,3 +216,15 @@ defensible to do automatically.
 load model, any threshold is arbitrary and would mostly re-flag the zero/frozen runs it borders.
 The D2 concern (the kept conflict value may itself be implausible) stays visible through the
 individually-logged conflict finding. Recorded as future work, not silently omitted.
+
+## Stage 8 — TOU classification
+
+**D19 — TOU bucket for an interval-ending label is decided by the interval START (label − 30
+min).** The label `07:00` covers 06:30–07:00 and is therefore Standard, not Peak; getting this
+wrong misprices two intervals at every peak boundary, every weekday — it moves real money.
+Classification is one pure vectorised function over the whole `DatetimeIndex` (`classify`), driven
+entirely by the config `TouScheme`: explicit weekday windows half-open `[start, end)`, everything
+else falling to the complement bucket. Weekday = `weekday() < 5` with holidays intentionally
+ignored per config; no holidays library is imported, and a test pins Youth Day (Tue 16 June 2026)
+to the same profile as a plain Tuesday so a future dependency cannot silently reprice the invoice.
+Bucket accounting is pinned too: 22 weekdays × (5 h peak / 11 h standard) × 2 intervals.
