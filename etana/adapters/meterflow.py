@@ -29,7 +29,7 @@ _COLUMNS = {
 }
 
 
-def load(path: Path, grid: pd.DatetimeIndex) -> dict[str, pd.DataFrame]:
+def load(path: Path, grid: pd.DatetimeIndex, findings: list | None = None) -> dict[str, pd.DataFrame]:
     """Read the stacked file and land each meter on the canonical grid."""
     frame = read_feed_csv(path, CONTRACT, required=list(_COLUMNS)).rename(columns=_COLUMNS)
 
@@ -39,11 +39,11 @@ def load(path: Path, grid: pd.DatetimeIndex) -> dict[str, pd.DataFrame]:
     # Labels are already interval-ending, so conversion is the whole job.
     ts = pd.to_datetime(frame["ts"], utc=True, format="ISO8601", errors="coerce")
     frame = exclude_unparseable(
-        frame.assign(interval_end=ts.dt.tz_convert(grid.tz)), ts, CONTRACT.provider
+        frame.assign(interval_end=ts.dt.tz_convert(grid.tz)), ts, CONTRACT.provider, findings
     )
 
-    frame = window(frame[["meter_id", "interval_end", "kwh"]], grid, CONTRACT.provider)
-    frame = dedupe_last_wins(frame, CONTRACT.provider)
+    frame = window(frame[["meter_id", "interval_end", "kwh"]], grid, CONTRACT.provider, findings)
+    frame = dedupe_last_wins(frame, CONTRACT.provider, findings)
 
     # Stacked file: split by meter id — never by row order, and never assuming
     # which meters appear; reconciliation against config happens downstream.

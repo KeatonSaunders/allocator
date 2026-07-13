@@ -17,6 +17,7 @@ import pandas as pd
 
 from ..canonical import STEP
 from ..log import kv
+from ..quality import QualityFinding, Severity, note
 
 log = logging.getLogger("etana.adapters")
 
@@ -65,7 +66,12 @@ def read_feed_csv(path: Path, contract: FeedContract, required: list[str]) -> pd
     return frame
 
 
-def window(frame: pd.DataFrame, grid: pd.DatetimeIndex, provider: str) -> pd.DataFrame:
+def window(
+    frame: pd.DataFrame,
+    grid: pd.DatetimeIndex,
+    provider: str,
+    findings: list[QualityFinding] | None = None,
+) -> pd.DataFrame:
     """Keep rows whose interval_end lies inside the billing month.
 
     Callers convert to the canonical zone *before* windowing — the SAST June
@@ -83,19 +89,40 @@ def window(frame: pd.DataFrame, grid: pd.DatetimeIndex, provider: str) -> pd.Dat
             "rows_excluded_outside_window",
             extra=kv(provider=provider, count=excluded),
         )
+        note(
+            findings, provider, "window", Severity.INFO,
+            f"{excluded} row(s) outside the billing month after tz conversion",
+            "excluded from the month, counted",
+        )
     return frame[inside]
 
 
-def exclude_unparseable(frame: pd.DataFrame, ts: pd.Series, provider: str) -> pd.DataFrame:
+def exclude_unparseable(
+    frame: pd.DataFrame,
+    ts: pd.Series,
+    provider: str,
+    findings: list[QualityFinding] | None = None,
+) -> pd.DataFrame:
     """Drop rows whose timestamp failed to parse — loudly, row by row. A
     garbage timestamp cannot be keyed to any interval, so exclusion is the
     only honest option; silence is not."""
-    for _, row in frame[ts.isna()].iterrows():
+    bad = frame[ts.isna()]
+    for _, row in bad.iterrows():
         log.warning("unparseable_timestamp", extra=kv(provider=provider, row=dict(row)))
+    if len(bad):
+        note(
+            findings, provider, "unparseable_timestamp", Severity.WARNING,
+            f"{len(bad)} row(s) with unparseable timestamps (each logged in full)",
+            "excluded — cannot be keyed to any interval",
+        )
     return frame[ts.notna()]
 
 
-def dedupe_last_wins(frame: pd.DataFrame, provider: str) -> pd.DataFrame:
+def dedupe_last_wins(
+    frame: pd.DataFrame,
+    provider: str,
+    findings: list[QualityFinding] | None = None,
+) -> pd.DataFrame:
     """Collapse re-sent readings on (meter_id, interval_end).
 
     Exact duplicates (same key, same value) collapse safely. Conflicting ones
@@ -106,10 +133,16 @@ def dedupe_last_wins(frame: pd.DataFrame, provider: str) -> pd.DataFrame:
     """
     dup = frame[frame.duplicated(KEY, keep=False)]
     if dup.empty:
+        note(findings, provider, "duplicates", Severity.INFO,
+             "no duplicate (meter, interval) keys", "none needed")
         return frame
     value_counts = dup.groupby(KEY)["kwh"].transform("nunique")
     exact = dup[value_counts == 1].drop_duplicates(KEY)
     conflicts = dup[value_counts > 1]
+    if len(exact):
+        note(findings, provider, "duplicates", Severity.INFO,
+             f"{len(exact)} exact duplicate key(s) (same value re-sent)",
+             "collapsed — identical, no tie-break needed")
     for (meter, end), group in conflicts.groupby(KEY):
         log.warning(
             "conflicting_duplicate",
@@ -120,6 +153,12 @@ def dedupe_last_wins(frame: pd.DataFrame, provider: str) -> pd.DataFrame:
                 values=list(group["kwh"]),
                 kept=group["kwh"].iloc[-1],
             ),
+        )
+        note(
+            findings, str(meter), "duplicates", Severity.WARNING,
+            f"conflicting duplicate: values {list(group['kwh'])} for the same interval",
+            f"kept last-received {group['kwh'].iloc[-1]} (file order = arrival order)",
+            end, end,
         )
     clean = frame.drop_duplicates(KEY, keep="last")
     log.info(

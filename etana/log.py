@@ -6,6 +6,7 @@ Usage:  log.info("rows_read", extra=kv(feed="meterflow", rows=2873))
 """
 
 import logging
+import sys
 
 
 def kv(**pairs) -> dict:
@@ -26,7 +27,21 @@ class KVFormatter(logging.Formatter):
         return " ".join(parts)
 
 
+class _LiveStderrHandler(logging.StreamHandler):
+    """Resolves sys.stderr at emit time, not at setup time — under pytest the
+    stream is swapped per test, and a handler bound to a finished test's
+    stream would raise on every later emit."""
+
+    @property
+    def stream(self):
+        return sys.stderr
+
+    @stream.setter
+    def stream(self, value):  # StreamHandler.__init__ assigns; ignore it
+        pass
+
+
 def setup(level: int = logging.INFO) -> None:
-    handler = logging.StreamHandler()
+    handler = _LiveStderrHandler()
     handler.setFormatter(KVFormatter())
     logging.basicConfig(level=level, handlers=[handler], force=True)

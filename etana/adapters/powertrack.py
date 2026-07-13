@@ -21,6 +21,7 @@ import pandas as pd
 
 from ..canonical import STEP, QualityFlag, to_canonical
 from ..log import kv
+from ..quality import Severity, note
 from .base import FeedContract, dedupe_last_wins, exclude_unparseable, read_feed_csv, window
 
 log = logging.getLogger("etana.adapters.powertrack")
@@ -40,7 +41,7 @@ _RAW_STEP = pd.Timedelta(minutes=CONTRACT.interval_minutes)
 _HALVES_PER_BUCKET = STEP // _RAW_STEP  # two 15-min readings per canonical 30-min interval
 
 
-def _aggregate(group: pd.DataFrame) -> pd.DataFrame:
+def _aggregate(group: pd.DataFrame, meter: str, findings: list | None) -> pd.DataFrame:
     """Sum 15-min kWh pairs into 30-min interval-ending buckets.
 
     A bucket built from only one of its two halves must NOT be silently
@@ -57,6 +58,12 @@ def _aggregate(group: pd.DataFrame) -> pd.DataFrame:
             "partial_pair_estimated",
             extra=kv(provider=CONTRACT.provider, interval_end=end, halves=1),
         )
+        note(
+            findings, meter, "partial_pair", Severity.WARNING,
+            "30-min bucket has only one usable 15-min half",
+            "scaled from the survivor, flagged estimated — not silently summed",
+            end, end,
+        )
     readings = pd.DataFrame(
         {
             "kwh": buckets["sum"].where(~partial, buckets["sum"] * _HALVES_PER_BUCKET),
@@ -68,7 +75,7 @@ def _aggregate(group: pd.DataFrame) -> pd.DataFrame:
     return readings[buckets["count"] > 0]
 
 
-def load(path: Path, grid: pd.DatetimeIndex) -> dict[str, pd.DataFrame]:
+def load(path: Path, grid: pd.DatetimeIndex, findings: list | None = None) -> dict[str, pd.DataFrame]:
     """Read the PowerTrack file and land each meter on the canonical grid."""
     frame = read_feed_csv(path, CONTRACT, required=list(_COLUMNS)).rename(columns=_COLUMNS)
 
@@ -77,7 +84,7 @@ def load(path: Path, grid: pd.DatetimeIndex) -> dict[str, pd.DataFrame]:
     ts = pd.to_datetime(
         frame["date"] + " " + frame["time"], format="%d/%m/%Y %H:%M", errors="coerce"
     )
-    frame = exclude_unparseable(frame.assign(parsed=ts), ts, CONTRACT.provider)
+    frame = exclude_unparseable(frame.assign(parsed=ts), ts, CONTRACT.provider, findings)
 
     # 1. Interval-beginning -> interval-ending BEFORE windowing or aggregation:
     #    a label names the point where its quarter-hour finishes.
@@ -86,12 +93,12 @@ def load(path: Path, grid: pd.DatetimeIndex) -> dict[str, pd.DataFrame]:
     # 2. Average kW over 15 min -> kWh: energy = power x hours, 15 min = 0.25 h.
     frame["kwh"] = frame["kw"] * (CONTRACT.interval_minutes / 60)
 
-    frame = window(frame[["meter_id", "interval_end", "kwh"]], grid, CONTRACT.provider)
-    frame = dedupe_last_wins(frame, CONTRACT.provider)
+    frame = window(frame[["meter_id", "interval_end", "kwh"]], grid, CONTRACT.provider, findings)
+    frame = dedupe_last_wins(frame, CONTRACT.provider, findings)
 
     # 3. 15-min halves -> 30-min buckets, partial pairs flagged (see _aggregate).
     source = f"{CONTRACT.provider}:{path.name}"
     return {
-        meter: to_canonical(meter, source, _aggregate(group), grid)
+        meter: to_canonical(meter, source, _aggregate(group, str(meter), findings), grid)
         for meter, group in frame.groupby("meter_id", sort=True)
     }

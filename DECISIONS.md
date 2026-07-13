@@ -182,3 +182,37 @@ the contradiction with the feed's documentation surfaces in every run, not just 
 The file has no meter column, so identity and nameplate both come from config (`generator`).
 The 24 exact zeros on 15 June land as ACTUAL values — zero is a legitimate hydro reading;
 classifying the run (outage vs missing-coded-as-zero) is the quality engine's finding to raise.
+
+## Stage 7 — Data quality engine
+
+**D14 — Gap thresholds** (canonical 30-min intervals, each justified in one line):
+≤2 (1 h) → linear interpolation: two near neighbours constrain a line tightly enough to bill on.
+3–12 (≤6 h) → profile estimate: enough same-weekday history exists in-month to be meaningful.
+\>12 → refuse: no data invented; null stays, flagged `suspect`, escalated as an ERROR finding,
+excluded from billed totals with the exclusion visible. Never mean substitution. When anchors or
+profile are unavailable (e.g. a month-edge gap), the policy cascades to refusal rather than
+inventing. MTR-1001's 12-interval gap sits exactly at the estimate threshold — estimated, by
+design, not refused.
+
+**D15 — Profile = same weekday × same half-hour slot mean (trusted rows only), not the planned
+weekday × TOU-period mean.** Strictly finer, TOU-consistent by construction (every slot lies in
+exactly one bucket), and it avoids the plan's dependency inversion — Stage 7 would otherwise need
+Stage 8's classifier. "Trusted" excludes suspect rows, so a frozen/zero run never feeds an
+estimate.
+
+**D16 — Zero-run and frozen-reading threshold: 6 intervals (3 h).** Real interval meters jitter;
+byte-identical values for 3+ hours point at a stuck register or zero-coded outage. Runs are
+flagged `suspect` with values preserved and the cause stated as unknown, never assumed. Detection
+runs before gap filling and only over `actual` rows, so synthetic fills can't create runs.
+
+**D17 — Findings are collected, not re-derived.** Adapters take an optional `findings` list and
+record duplicates, window exclusions, unparseable rows, partial pairs, bounds checks and the D1
+contract override as `QualityFinding`s at the point of discovery; `assess()` adds completeness,
+boundary presence, value runs and gap actions. Severity semantics: `info` = check ran and passed
+(evidence), `warning` = quirk found and handled (handling stated), `error` = escalation, nothing
+defensible to do automatically.
+
+**D18 — Step-change/spike detection consciously deferred.** With one month of data and no site
+load model, any threshold is arbitrary and would mostly re-flag the zero/frozen runs it borders.
+The D2 concern (the kept conflict value may itself be implausible) stays visible through the
+individually-logged conflict finding. Recorded as future work, not silently omitted.
