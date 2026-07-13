@@ -137,3 +137,18 @@ without deciding their fate — that's the quality engine's call (interpolate / 
 An honest fifth state beats overloading `suspect` or a bare NaN: after gap handling, no billed row
 is ever `missing`. Off-grid or duplicated labels at this layer are programming errors (adapters
 window and dedupe first) and fail loud rather than being reported as data findings.
+
+## Stage 4 — MeterFlow adapter
+
+**D10 — Dedupe happens at ingestion, in the adapters' shared base.** `to_canonical` demands
+unique labels, so last-received-wins runs before landing (CLAUDE.md's "rows in, rows after
+dedupe" ingestion logging implies the same). Exact and conflicting duplicates are counted
+separately and every conflict is logged individually with both values; Stage 7 lifts these log
+events into QualityFinding records. The tie-break (file order = arrival order, last wins) is
+policy shared by all providers, hence `base.py`, not per-adapter code.
+
+**D11 — Rows the adapter cannot place are excluded loudly, never crashed on.** An unparseable
+timestamp cannot be keyed to any interval: logged row-by-row (`unparseable_timestamp`) and
+excluded — the real file has none. A present-but-null kWh value *can* be keyed: it lands on the
+grid as an actual-flagged NaN and Stage 7 reports it separately from missing rows. Out-of-window
+rows are counted and logged (`rows_excluded_outside_window`).
