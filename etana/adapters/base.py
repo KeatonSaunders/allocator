@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from ..canonical import STEP
 from ..log import kv
 
 log = logging.getLogger("etana.adapters")
@@ -69,10 +70,13 @@ def window(frame: pd.DataFrame, grid: pd.DatetimeIndex, provider: str) -> pd.Dat
 
     Callers convert to the canonical zone *before* windowing — the SAST June
     month starts at 22:00 UTC on 31 May, so clipping on raw labels would lose
-    or gain boundary hours. Excluded rows are counted and logged, not silently
-    dropped.
+    or gain boundary hours. The span is half-open (month_start, month_end] on
+    ending labels, so it also admits sub-canonical labels (a 15-min feed's
+    first June label ends 00:15, before grid[0]). Excluded rows are counted
+    and logged, not silently dropped.
     """
-    inside = frame["interval_end"].between(grid[0], grid[-1])
+    month_start = grid[0] - STEP
+    inside = (frame["interval_end"] > month_start) & (frame["interval_end"] <= grid[-1])
     excluded = int((~inside).sum())
     if excluded:
         log.info(
@@ -80,6 +84,15 @@ def window(frame: pd.DataFrame, grid: pd.DatetimeIndex, provider: str) -> pd.Dat
             extra=kv(provider=provider, count=excluded),
         )
     return frame[inside]
+
+
+def exclude_unparseable(frame: pd.DataFrame, ts: pd.Series, provider: str) -> pd.DataFrame:
+    """Drop rows whose timestamp failed to parse — loudly, row by row. A
+    garbage timestamp cannot be keyed to any interval, so exclusion is the
+    only honest option; silence is not."""
+    for _, row in frame[ts.isna()].iterrows():
+        log.warning("unparseable_timestamp", extra=kv(provider=provider, row=dict(row)))
+    return frame[ts.notna()]
 
 
 def dedupe_last_wins(frame: pd.DataFrame, provider: str) -> pd.DataFrame:

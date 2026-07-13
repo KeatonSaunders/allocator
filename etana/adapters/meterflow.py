@@ -7,16 +7,12 @@ span in Stage 1). Everything MeterFlow-specific stays in this module.
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
 import pandas as pd
 
 from ..canonical import to_canonical
-from ..log import kv
-from .base import FeedContract, dedupe_last_wins, read_feed_csv, window
-
-log = logging.getLogger("etana.adapters.meterflow")
+from .base import FeedContract, dedupe_last_wins, exclude_unparseable, read_feed_csv, window
 
 CONTRACT = FeedContract(
     provider="MeterFlow",
@@ -42,12 +38,9 @@ def load(path: Path, grid: pd.DatetimeIndex) -> dict[str, pd.DataFrame]:
     # would clip the month's first two hours and keep two hours of July.
     # Labels are already interval-ending, so conversion is the whole job.
     ts = pd.to_datetime(frame["ts"], utc=True, format="ISO8601", errors="coerce")
-    unparseable = frame[ts.isna()]
-    for _, row in unparseable.iterrows():
-        # A garbage timestamp can't be placed on any interval: excluded, but
-        # loudly, row by row — never silently dropped.
-        log.warning("unparseable_timestamp", extra=kv(provider=CONTRACT.provider, row=dict(row)))
-    frame = frame.assign(interval_end=ts.dt.tz_convert(grid.tz))[ts.notna()]
+    frame = exclude_unparseable(
+        frame.assign(interval_end=ts.dt.tz_convert(grid.tz)), ts, CONTRACT.provider
+    )
 
     frame = window(frame[["meter_id", "interval_end", "kwh"]], grid, CONTRACT.provider)
     frame = dedupe_last_wins(frame, CONTRACT.provider)

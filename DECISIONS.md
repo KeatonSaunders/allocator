@@ -152,3 +152,20 @@ timestamp cannot be keyed to any interval: logged row-by-row (`unparseable_times
 excluded — the real file has none. A present-but-null kWh value *can* be keyed: it lands on the
 grid as an actual-flagged NaN and Stage 7 reports it separately from missing rows. Out-of-window
 rows are counted and logged (`rows_excluded_outside_window`).
+
+## Stage 5 — PowerTrack adapter
+
+**D12 — A partial 15-min pair is scaled and flagged `estimated`, never silently summed.** The
+plan allowed `suspect` or `estimated` depending on fill strategy. Call: the surviving half is
+scaled to the full bucket (missing quarter-hour assumed to resemble its sibling), flagged
+`estimated`, and logged per bucket — this preserves real information while the flag keeps it out
+of "measured" totals. Halves are counted with a non-null `count`, so a present-but-blank half
+also makes its bucket partial (a plain `resample().sum()` would halve the reading twice over and
+say nothing). A bucket with *zero* usable halves emits nothing and becomes a `missing` canonical
+row — which is exactly Q4's shape on the real data (D3): one whole missing interval, no partials.
+
+**Window generalised to (month_start, month_end] on ending labels** so sub-canonical feeds
+window correctly: PT-77's first June label ends 00:15, which `between(grid[0], grid[-1])` would
+have wrongly excluded. The transform order is fixed and load-bearing: beginning→ending *before*
+windowing (else the May-23:45 row would survive), kW→kWh from `contract.interval_minutes` (the
+0.25 is derived, not a literal), aggregation last.
