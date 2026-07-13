@@ -268,3 +268,12 @@ structural (a site cannot be billed on nothing) → exit 2. An unconfigured mete
 data is a *finding* (`unconfigured_meter`, warning) and is ignored for billing — data problems
 report and continue. The billed-energy-by-flag split in the summary comes from grouping each
 site's allocated energy by its quality flags, so an invoice can be defended row by row.
+
+**D26 — One source of truth per report table (amends D24).** Every table is built exactly once
+as a full-precision DataFrame; its CSV is that frame verbatim and the markdown is a rendering of
+the same frame, so the human and machine layers cannot diverge. The per-bucket
+`wheeling_zar_rounded` column is gone: nothing is billed at bucket grain, so per-bucket ZAR is
+never rounded. The pipeline's single rounding point is now a visible column —
+`site_totals.invoice_zar`, rounded once from each site's full-precision sum — and "total billed"
+is the sum of those per-site invoice figures (2,846,534.35, one cent under the display-rounded
+grand total), because three invoices are what actually gets billed.

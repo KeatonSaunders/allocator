@@ -5,11 +5,16 @@ sites. This tool takes the month's half-hourly meter feeds, lands them on one ca
 allocates each half-hour of generation to the sites under their contracted percentages, prices
 the allocated energy under time-of-use tariffs, and writes two deliverables:
 
-- **`quality_report.md` + `findings.csv`** — every data quirk found, the action taken on each,
-  and the checks that ran and passed.
-- **`monthly_summary.md` + `monthly_summary.csv`** — per site × TOU period: consumption,
-  allocated energy, residual, and the wheeling amount in ZAR; plus the generation account and a
-  split of billed energy by data quality flag.
+- **`quality_report.md`** — feed contracts as asserted, interval reconciliation per meter, every
+  data quirk found with the action taken, and the checks that ran and passed.
+- **`monthly_summary.md`** — per site × TOU period: consumption, allocated energy, residual and
+  the wheeling amount in ZAR; site invoice totals; the generation account; and a split of billed
+  energy by data quality flag.
+
+Every table in the markdown is also written as its own CSV at full precision — the human and
+machine layers are two renderings of the same frames, so they cannot diverge:
+`feed_contracts`, `interval_reconciliation`, `findings`, `monthly_summary`, `site_totals`
+(including the once-rounded `invoice_zar`), `generation_account`, `billed_by_flag`.
 
 ## Run
 
@@ -41,7 +46,8 @@ canonical.py       the one grid: 30-min, kWh, SAST, interval-ending, 1440 interv
 quality.py         standing checks -> QualityFinding records; gap policy; flags
 tou.py             pure: interval label -> peak/standard/offpeak (config-driven)
 allocation.py      pure: per-interval cap, residual, unallocated; invariants assert
-report.py          both deliverables; the single point of ZAR rounding
+report.py          each table built once: CSV verbatim, markdown rendered from
+                   the same frame; single ZAR rounding point (invoice_zar)
 cli.py             one command wires it together
 ```
 
@@ -51,7 +57,7 @@ from `allocation_config.json`; nothing is hard-coded.
 
 ## Decisions register
 
-The full register with reasoning is [`DECISIONS.md`](DECISIONS.md) (D1–D25); the calls that move
+The full register with reasoning is [`DECISIONS.md`](DECISIONS.md) (D1–D26); the calls that move
 money or data:
 
 | Decision | Call |
@@ -67,14 +73,15 @@ money or data:
 | Wheeling billed on | **Allocated energy × TOU rate**, not consumption; the summary shows both (D22) |
 | NaN (refused) intervals | Excluded, not zeroed; exclusions surfaced next to the totals (D20) |
 | Public holidays | Normal weekdays per config; no holidays library; Youth Day pinned by test (D19) |
-| Rounding | Full precision throughout; each ZAR figure rounded once at reporting (D24) |
+| Rounding | Full precision throughout; ZAR rounded exactly once, into `site_totals.invoice_zar` — the per-site invoice figure (D24/D26) |
 | Allocation % not 100 | Finding, applied as configured; but actual over-allocation (negative unallocated) refuses to bill (D7/D21) |
 
 ## June 2026 result shape (sanity check)
 
 Generation 2,769,905 kWh vs total consumption 1,765,746 kWh: the cap binds in 81–94% of
 intervals per site, residual grid purchase is 3.6% of consumption, and 38.5% of generation is
-unallocated — exactly the shape the brief predicts. Total wheeling billed: **ZAR 2,846,534.36**.
+unallocated — exactly the shape the brief predicts. Total wheeling billed (sum of the three
+per-site invoice figures): **ZAR 2,846,534.35**.
 
 ## Two questions for the client
 

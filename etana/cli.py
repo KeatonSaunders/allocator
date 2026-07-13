@@ -17,7 +17,7 @@ from . import report
 from .adapters import generation, meterflow, powertrack
 from .adapters.base import FeedError
 from .allocation import allocate, summarise
-from .canonical import QualityFlag, month_grid
+from .canonical import month_grid
 from .config import Config, ConfigError, load_config
 from .log import kv, setup
 from .quality import QualityFinding, Severity, assess, note
@@ -88,22 +88,11 @@ def _run(cfg: Config, data_dir: Path, out_dir: Path) -> list[Path]:
     alloc = allocate(gen_kwh, consumption, {s.meter: s.allocation_fraction for s in cfg.sites})
     summary = summarise(alloc, classify(grid, cfg.tou), cfg.rates_zar_per_kwh)
 
-    # Billed (allocated) energy split by each site's quality flags, so an
-    # invoice can be defended row by row.
-    billed_by_flag = pd.DataFrame({
-        meter: alloc.allocated[meter].groupby(assessed[meter]["flag"]).sum()
-        for meter in consumption.columns
-    }).T.reindex(
-        columns=[f.value for f in QualityFlag if f is not QualityFlag.MISSING], fill_value=0.0
-    ).fillna(0.0).rename_axis("meter")
-
     contracts = {
         adapter.CONTRACT.provider: adapter.CONTRACT
         for adapter in (meterflow, powertrack, generation)
     }
-    return report.write_all(
-        out_dir, cfg, contracts, findings, assessed, alloc, summary, billed_by_flag
-    )
+    return report.write_all(out_dir, cfg, contracts, findings, assessed, alloc, summary)
 
 
 def main(argv: list[str] | None = None) -> int:
