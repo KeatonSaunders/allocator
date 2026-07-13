@@ -13,15 +13,14 @@ the allocated energy under time-of-use tariffs, and writes two deliverables:
 
 ## Run
 
-Requires Python 3.11+ with `pandas` (and `tzdata` on Windows, which ships no IANA timezone
-database):
+Requires Python 3.11+:
 
 ```bash
-pip install pandas tzdata          # once
+pip install -r requirements.txt   # pandas; tzdata on Windows; pytest for the tests
 python -m etana run --config config/allocation_config.json --data ./data --out ./out
 ```
 
-Tests (`pip install pytest` once):
+Tests:
 
 ```bash
 pytest tests/ -v
