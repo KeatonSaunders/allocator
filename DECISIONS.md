@@ -228,3 +228,24 @@ else falling to the complement bucket. Weekday = `weekday() < 5` with holidays i
 ignored per config; no holidays library is imported, and a test pins Youth Day (Tue 16 June 2026)
 to the same profile as a plain Tuesday so a future dependency cannot silently reprice the invoice.
 Bucket accounting is pinned too: 22 weekdays × (5 h peak / 11 h standard) × 2 intervals.
+
+## Stage 9 — Allocation core
+
+**D20 — NaN consumption is excluded, not zeroed.** A refused gap means the energy is *unknown*:
+`allocated` stays NaN (unknown ≠ zero), the interval contributes nothing to billed totals, and
+`summarise` carries an `excluded_intervals` column so the exclusion sits visibly next to the
+totals it is absent from. For the pool identity, energy not known to be delivered is not counted
+as delivered: `unallocated = generation − Σ allocated.fillna(0)`.
+
+**D21 — Negative unallocated aborts the run.** It can only arise when configured fractions
+exceed 100% *and* the cap fails to bind — over-allocated generation, a broken model. D7 stands
+(a total ≠ 100 is a finding, and <100 runs fine forever); but if over-allocation actually
+manifests, there is no defensible invoice and the invariant assertion crashes rather than bills.
+
+**D22 — Wheeling is billed on allocated energy × TOU rate.** The summary carries consumption and
+allocated side by side and states which one the money follows. Everything stays full-precision
+floats end to end; ZAR rounding happens exactly once, in the reporting layer (Stage 10).
+
+**Real-month shape (measured, Stage 9):** cap binds 81–94% of intervals per site; residual =
+3.6% of consumption; unallocated = 38.5% of generation. Matches the expected shape; the
+integration test asserts margins (not exact values) chosen to catch unit/convention errors.
