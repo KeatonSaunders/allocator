@@ -169,3 +169,16 @@ window correctly: PT-77's first June label ends 00:15, which `between(grid[0], g
 have wrongly excluded. The transform order is fixed and load-bearing: beginning→ending *before*
 windowing (else the May-23:45 row would survive), kW→kWh from `contract.interval_minutes` (the
 0.25 is derived, not a literal), aggregation last.
+
+## Stage 6 — Generation adapter
+
+**D13 — Physical impossibilities are flagged with their values preserved, never clipped.**
+Nameplate cap is derived from config (`capacity_mw × 1000 kW × 0.5 h = 2500 kWh` per half-hour);
+anything above it, or negative, is flagged `suspect` with the reading kept intact — clipping
+would fabricate a measurement. The bounds check logs as a passed check (INFO) when clean, so the
+evidence reaches the report either way. The real feed is clean: max 2382.348 kWh, no negatives.
+The D1 convention override (+30 min) is logged as `contract_overrides_documentation` at load, so
+the contradiction with the feed's documentation surfaces in every run, not just in this register.
+The file has no meter column, so identity and nameplate both come from config (`generator`).
+The 24 exact zeros on 15 June land as ACTUAL values — zero is a legitimate hydro reading;
+classifying the run (outage vs missing-coded-as-zero) is the quality engine's finding to raise.
