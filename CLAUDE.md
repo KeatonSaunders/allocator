@@ -112,6 +112,9 @@ execution, not as comments.
   Don't settle for the first thing that comes to mind, try to find the most minimal, better working design. 
   Don't introduce slop: for example fragile code that just patches specific cases, dead or useless code 
   and code way more complicated than it needs to be. Treat code as a liability.
+- Use pandas to the greatest extent possible for datagrids and numerical computation (numpy where it
+  helps): vectorised operations over hand-rolled loops — drastically fewer lines, and blazingly fast.
+  Domain logic remains plain, directly-testable functions; they just operate on pandas structures.
 - SOLID principles and design patterns are good only where they improve future extension, maintenance or
   legibility. No abstraction for a plethora of hypothetical futures until it is necessary.
 - Favour legibility and clarity over unnecessary abstraction; small duplication is acceptable if

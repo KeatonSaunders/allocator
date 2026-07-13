@@ -119,3 +119,21 @@ buckets must match exactly (structural: a bucket without a rate cannot be billed
 
 **Structured logging:** stdlib `logging` with a kv formatter (`level=… event=… key=value`) on
 stderr — grep-able runs without a structlog dependency. No `print` anywhere.
+
+## Stage 3 — Canonical grid
+
+**D8 — Pandas adopted for datagrids and numerics** (ethos change, recorded in CLAUDE.md): use
+pandas to the greatest extent for grids, resampling, joins and aggregation — drastically fewer
+lines than hand-rolled loops. Domain logic stays in plain, directly-testable functions that
+operate on pandas structures. The canonical layer is a DataFrame indexed by tz-aware
+`interval_end` with columns `meter_id, kwh, flag, source`; the grid is
+`month_grid(year, month, tz)` → `pd.DatetimeIndex`, month and zone from config. Note: pandas 3.0
+str-dtype columns don't compare elementwise against `(str, Enum)` members, so `QualityFlag` is a
+`StrEnum`.
+
+**D9 — `missing` is an explicit QualityFlag value.** The planned enum was
+`actual | interpolated | estimated | suspect`, but `to_canonical` must *mark* absent intervals
+without deciding their fate — that's the quality engine's call (interpolate / estimate / refuse).
+An honest fifth state beats overloading `suspect` or a bare NaN: after gap handling, no billed row
+is ever `missing`. Off-grid or duplicated labels at this layer are programming errors (adapters
+window and dedupe first) and fail loud rather than being reported as data findings.
