@@ -83,7 +83,7 @@ intervals per site, residual grid purchase is 3.6% of consumption, and 38.5% of 
 unallocated — exactly the shape the brief predicts. Total wheeling billed (sum of the three
 per-site invoice figures): **ZAR 2,846,534.35**.
 
-## Two questions for the client
+## Two questions for the client/generator
 
 1. **The MTR-1002 conflicting re-send (8 June, 10:30 SAST): which value is authoritative?**
    The provider sent `633.423` then `1140.161` for the same interval. Per the stated last-received
