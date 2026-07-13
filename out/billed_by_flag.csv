@@ -1,0 +1,4 @@
+meter,site,actual_kwh,interpolated_kwh,estimated_kwh,suspect_kwh
+MTR-1001,Atlantic Foods,639308.2262,0.0,8775.973066666667,0.0
+MTR-1002,Cape Textiles,483768.00455,0.0,0.0,0.0
+PT-77,Delta Cold Storage,568169.985,441.4845,0.0,1760.0

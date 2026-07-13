@@ -1,0 +1,5 @@
+meter,intervals,actual,interpolated,estimated,suspect,unbilled_null,total_kwh
+GEN-RH-01,1440,1416,0,0,24,0,2769905.09
+MTR-1001,1440,1428,0,12,0,0,682826.8836666667
+MTR-1002,1440,1440,0,0,0,0,501198.58999999997
+PT-77,1440,1429,1,0,10,0,581720.6485

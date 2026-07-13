@@ -4,6 +4,6 @@ scratch/
 __pycache__/
 *.pyc
 venv/
-out/
 .pytest_cache/
 .claude/settings.local.json
+.vscode/

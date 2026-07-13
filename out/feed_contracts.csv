@@ -1,0 +1,4 @@
+provider,timezone,interval_minutes,unit,convention,register,sign,delimiter,decimal
+MeterFlow,UTC,30,kwh,ending,interval,positive,",",.
+PowerTrack,Africa/Johannesburg,15,kw,beginning,interval,positive,;,.
+RiversideHydro,Africa/Johannesburg,30,kwh,beginning,interval,positive,",",.
