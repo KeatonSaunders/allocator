@@ -1,0 +1,40 @@
+{
+  "billing_month": "2026-06",
+  "timezone": "Africa/Johannesburg (SAST, UTC+2, no DST)",
+  "generator": {
+    "name": "Riverside Hydro",
+    "meter": "GEN-RH-01",
+    "capacity_mw": 5.0
+  },
+  "sites": [
+    {
+      "site": "Atlantic Foods",
+      "meter": "MTR-1001",
+      "provider": "MeterFlow",
+      "allocation_pct": 40.0
+    },
+    {
+      "site": "Cape Textiles",
+      "meter": "MTR-1002",
+      "provider": "MeterFlow",
+      "allocation_pct": 35.0
+    },
+    {
+      "site": "Delta Cold Storage",
+      "meter": "PT-77",
+      "provider": "PowerTrack",
+      "allocation_pct": 25.0
+    }
+  ],
+  "tou_periods_sast": {
+    "peak": "Weekdays 07:00-10:00 and 18:00-20:00",
+    "standard": "Weekdays 06:00-07:00, 10:00-18:00 and 20:00-22:00",
+    "offpeak": "All other times, including all weekend hours",
+    "note": "Public holidays are treated as normal weekdays for this exercise."
+  },
+  "wheeling_rates_zar_per_kwh": {
+    "peak": 2.5,
+    "standard": 1.8,
+    "offpeak": 1.1
+  }
+}

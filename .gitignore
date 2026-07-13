@@ -1,0 +1,8 @@
+# Stage 1 throwaway recon — never part of the submission
+scratch/
+
+__pycache__/
+*.pyc
+.venv/
+out/
+.pytest_cache/
