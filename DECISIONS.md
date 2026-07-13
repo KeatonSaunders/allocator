@@ -91,3 +91,31 @@ not to exercise it.
 half-hour vs total consumption ≈ 900 kWh (MTR-1001 ≈ 300, MTR-1002 ≈ 200, PT-77 ≈ 780 kW × 0.5 h
 ≈ 390). The allocation cap will bind almost every interval, residual will be near zero, and
 monthly unallocated generation will be large.
+
+## Stage 2 — CLI skeleton, typed config loader, structured logging
+
+**D4 — No packaging.** Not a distributable library, so no `pyproject.toml`. The `etana/` package
+sits at the repo root and runs with zero install: `python -m etana run --config
+config/allocation_config.json --data ./data --out ./out`. An empty root `conftest.py` puts the
+repo root on `sys.path` so pytest imports `etana` the same way. Stdlib-only so far; the dev venv
+carries pytest (plus `tzdata` — Windows Python ships no IANA timezone database).
+
+**D5 — TOU windows are parsed from the prose config strings.** `tou_periods_sast` holds prose
+("Weekdays 07:00-10:00 and 18:00-20:00"), and nothing may be hard-coded, so the loader extracts
+every `HH:MM-HH:MM` range as a weekday window. A bucket with no ranges ("All other times…") is the
+**complement**: uncovered weekday hours plus all weekend hours. Coverage of 24h/7d therefore holds
+by construction, and the loader validates the two remaining failure modes: overlapping windows and
+not-exactly-one complement bucket. The `note` key is documentation, not a bucket. In practice this
+would come from an API or DB as structured data rather than prose.
+
+**D6 — Timezone from config, not code.** The `timezone` field is also prose; the leading token
+(`Africa/Johannesburg`) is taken as the IANA name and validated via `ZoneInfo` at load. The
+canonical grid (Stage 3) takes its zone from here.
+
+**D7 — Allocation percentages not summing to 100 is a finding, not a crash.** The loader validates
+each percentage individually (structural), but the total is business data: logged as a warning,
+applied exactly as configured, and carried into the data quality report (Stage 7). Rates ↔ TOU
+buckets must match exactly (structural: a bucket without a rate cannot be billed).
+
+**Structured logging:** stdlib `logging` with a kv formatter (`level=… event=… key=value`) on
+stderr — grep-able runs without a structlog dependency. No `print` anywhere.
