@@ -22,6 +22,8 @@ CONTRACT = FeedContract(
     convention="ending",
 )
 
+FILE_GLOB = "meterflow_*.csv"  # provider file naming is a provider quirk too
+
 _COLUMNS = {
     "meter_serial": "meter_id",
     "reading_timestamp_utc": "ts",
@@ -31,7 +33,7 @@ _COLUMNS = {
 
 def load(path: Path, grid: pd.DatetimeIndex, findings: list | None = None) -> dict[str, pd.DataFrame]:
     """Read the stacked file and land each meter on the canonical grid."""
-    frame = read_feed_csv(path, CONTRACT, required=list(_COLUMNS)).rename(columns=_COLUMNS)
+    frame = read_feed_csv(path, CONTRACT, list(_COLUMNS), findings).rename(columns=_COLUMNS)
 
     # Parse as UTC-aware, convert to the canonical zone, and only THEN window:
     # SAST June starts 2026-05-31 22:00 UTC, so windowing on raw UTC labels

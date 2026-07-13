@@ -33,6 +33,8 @@ CONTRACT = FeedContract(
     convention="beginning",  # documented "ending"; the raw span proves otherwise (D1)
 )
 
+FILE_GLOB = "*generation_*.csv"  # provider file naming is a provider quirk too
+
 _COLUMNS = {"timestamp_sast": "ts", "generation_kwh": "kwh"}
 
 
@@ -47,7 +49,7 @@ def load(
     The file carries no meter column, so identity (and nameplate) come from
     config via `generator`.
     """
-    frame = read_feed_csv(path, CONTRACT, required=list(_COLUMNS)).rename(columns=_COLUMNS)
+    frame = read_feed_csv(path, CONTRACT, list(_COLUMNS), findings).rename(columns=_COLUMNS)
     frame["meter_id"] = generator.meter
 
     ts = pd.to_datetime(frame["ts"], format="%Y-%m-%d %H:%M", errors="coerce")

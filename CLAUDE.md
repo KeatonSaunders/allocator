@@ -1,6 +1,6 @@
 # Agent Notes
 
-ABC Energy buys electricity from independent generators and wheels it through the grid to
+Etana Energy buys electricity from independent generators and wheels it through the grid to
 customer sites. At month end, half-hourly meter data determines how much of each generator's
 output was allocated to each customer site, and prices that energy under time-of-use tariffs.
 

@@ -46,7 +46,12 @@ class FeedContract:
     decimal: str = "."
 
 
-def read_feed_csv(path: Path, contract: FeedContract, required: list[str]) -> pd.DataFrame:
+def read_feed_csv(
+    path: Path,
+    contract: FeedContract,
+    required: list[str],
+    findings: list[QualityFinding] | None = None,
+) -> pd.DataFrame:
     """Read a provider file in its declared format; wrong shape fails loud."""
     try:
         frame = pd.read_csv(
@@ -63,6 +68,8 @@ def read_feed_csv(path: Path, contract: FeedContract, required: list[str]) -> pd
             f"{sorted(missing)}; found {list(frame.columns)}"
         )
     log.info("feed_read", extra=kv(provider=contract.provider, file=path.name, rows=len(frame)))
+    note(findings, contract.provider, "feed_read", Severity.INFO,
+         f"{len(frame)} data rows read from {path.name}", "parsed against contract")
     return frame
 
 

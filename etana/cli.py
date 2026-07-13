@@ -1,16 +1,27 @@
-"""One command produces both deliverables.
+"""One command, both deliverables.
 
-Stage 2: load and validate config, log a structured start line, exit 0.
-The pipeline (adapters -> quality -> TOU -> allocation -> reports) lands in
-stages 4-10.
+`python -m etana run --config ... --data ... --out ...` ingests the three
+provider feeds onto the canonical grid, runs the quality engine, allocates,
+and writes the data quality report and the monthly summary. Structural
+problems (bad config, missing/ambiguous feed files, unknown meters) exit
+non-zero; data problems become findings in the report and the run continues.
 """
 
 import argparse
 import logging
 from pathlib import Path
 
-from .config import ConfigError, load_config
+import pandas as pd
+
+from . import report
+from .adapters import generation, meterflow, powertrack
+from .adapters.base import FeedError
+from .allocation import allocate, summarise
+from .canonical import QualityFlag, month_grid
+from .config import Config, ConfigError, load_config
 from .log import kv, setup
+from .quality import QualityFinding, Severity, assess, note
+from .tou import classify
 
 log = logging.getLogger("etana.cli")
 
@@ -26,6 +37,73 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--data", type=Path, default=Path("data"), help="directory with the raw meter files")
     run.add_argument("--out", type=Path, default=Path("out"), help="directory for the reports")
     return parser
+
+
+def _find_feed_file(data_dir: Path, pattern: str, provider: str) -> Path:
+    matches = sorted(data_dir.glob(pattern))
+    if len(matches) != 1:
+        raise FeedError(
+            f"{provider}: expected exactly one file matching {pattern!r} in "
+            f"{data_dir}, found {len(matches)}"
+        )
+    return matches[0]
+
+
+def _run(cfg: Config, data_dir: Path, out_dir: Path) -> list[Path]:
+    grid = month_grid(cfg.billing_year, cfg.billing_month, cfg.timezone)
+    findings: list[QualityFinding] = []
+
+    # Config-level finding (D7): percentages are applied exactly as configured.
+    total_pct = cfg.allocation_pct_total
+    note(
+        findings, "config", "allocation_pct_total",
+        Severity.INFO if abs(total_pct - 100.0) < 1e-9 else Severity.WARNING,
+        f"configured allocation percentages sum to {total_pct}",
+        "applied as configured",
+    )
+    if abs(total_pct - 100.0) >= 1e-9:
+        log.warning("allocation_pct_total_not_100", extra=kv(total=total_pct))
+
+    feeds: dict[str, pd.DataFrame] = {}
+    for adapter in (meterflow, powertrack):
+        path = _find_feed_file(data_dir, adapter.FILE_GLOB, adapter.CONTRACT.provider)
+        feeds |= adapter.load(path, grid, findings)
+    gen_path = _find_feed_file(data_dir, generation.FILE_GLOB, generation.CONTRACT.provider)
+    feeds |= generation.load(gen_path, grid, cfg.generator, findings)
+
+    # Reconcile the feeds against config: a configured meter without data is
+    # structural (cannot bill a site on nothing); an unconfigured meter in the
+    # data is a finding, not a crash.
+    configured = {site.meter for site in cfg.sites} | {cfg.generator.meter}
+    if missing := sorted(configured - set(feeds)):
+        raise FeedError(f"no data found for configured meter(s): {missing}")
+    for extra in sorted(set(feeds) - configured):
+        note(findings, extra, "unconfigured_meter", Severity.WARNING,
+             "meter present in the data but not in config", "ignored for billing")
+
+    assessed = {meter: assess(feeds[meter], findings) for meter in sorted(configured)}
+
+    gen_kwh = assessed[cfg.generator.meter]["kwh"]
+    consumption = pd.DataFrame({s.meter: assessed[s.meter]["kwh"] for s in cfg.sites})
+    alloc = allocate(gen_kwh, consumption, {s.meter: s.allocation_fraction for s in cfg.sites})
+    summary = summarise(alloc, classify(grid, cfg.tou), cfg.rates_zar_per_kwh)
+
+    # Billed (allocated) energy split by each site's quality flags, so an
+    # invoice can be defended row by row.
+    billed_by_flag = pd.DataFrame({
+        meter: alloc.allocated[meter].groupby(assessed[meter]["flag"]).sum()
+        for meter in consumption.columns
+    }).T.reindex(
+        columns=[f.value for f in QualityFlag if f is not QualityFlag.MISSING], fill_value=0.0
+    ).fillna(0.0).rename_axis("meter")
+
+    contracts = {
+        adapter.CONTRACT.provider: adapter.CONTRACT
+        for adapter in (meterflow, powertrack, generation)
+    }
+    return report.write_all(
+        out_dir, cfg, contracts, findings, assessed, alloc, summary, billed_by_flag
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -49,10 +127,12 @@ def main(argv: list[str] | None = None) -> int:
             out=str(args.out),
         ),
     )
-    # Percentages not summing to 100 is a data-quality finding, not a crash:
-    # they are applied exactly as configured and the report will say so.
-    if abs(cfg.allocation_pct_total - 100.0) > 1e-9:
-        log.warning("allocation_pct_total_not_100", extra=kv(total=cfg.allocation_pct_total))
+    try:
+        written = _run(cfg, args.data, args.out)
+    except FeedError as exc:
+        log.error("feed_invalid", extra=kv(error=str(exc)))
+        return 2
+    log.info("run_complete", extra=kv(files=",".join(p.name for p in written)))
     return 0
 
 

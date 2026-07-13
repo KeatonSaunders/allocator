@@ -90,8 +90,9 @@ def test_cli_nonzero_exit_and_message_on_malformed(tmp_path, capsys):
     assert "config_invalid" in err and "wheeling_rates_zar_per_kwh" in err
 
 
-def test_cli_zero_exit_on_real_config(capsys):
-    assert main(["run", "--config", str(REAL_CONFIG)]) == 0
+def test_cli_zero_exit_on_real_config(tmp_path, capsys):
+    args = ["--data", str(REPO / "data"), "--out", str(tmp_path / "out")]
+    assert main(["run", "--config", str(REAL_CONFIG), *args]) == 0
     assert "run_start" in capsys.readouterr().err
 
 
@@ -100,5 +101,6 @@ def test_pct_not_summing_to_100_is_finding_not_crash(tmp_path, capsys):
     cfg["sites"][0]["allocation_pct"] = 10.0  # total now 70
     path = write(tmp_path, cfg)
     assert load_config(path).allocation_pct_total == pytest.approx(70.0)
-    assert main(["run", "--config", str(path)]) == 0  # continue, don't crash
+    args = ["--data", str(REPO / "data"), "--out", str(tmp_path / "out")]
+    assert main(["run", "--config", str(path), *args]) == 0  # continue, don't crash
     assert "allocation_pct_total_not_100" in capsys.readouterr().err

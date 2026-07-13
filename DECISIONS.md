@@ -249,3 +249,22 @@ floats end to end; ZAR rounding happens exactly once, in the reporting layer (St
 **Real-month shape (measured, Stage 9):** cap binds 81–94% of intervals per site; residual =
 3.6% of consumption; unallocated = 38.5% of generation. Matches the expected shape; the
 integration test asserts margins (not exact values) chosen to catch unit/convention errors.
+
+## Stage 10 — Reports, CLI wiring, README
+
+**D23 — Feed files are discovered by provider glob, exactly one match required.** File naming is
+a provider quirk, so each adapter declares its own `FILE_GLOB` (`meterflow_*.csv`, …). Zero or
+multiple matches in `--data` is structural (which file would be the invoice source?) → clear
+message, exit 2. The billing month in the filename is not asserted: a wrong-month file produces a
+fully-missing completeness finding, which is louder and more honest than a filename check.
+
+**D24 — Rounding happens exactly once, in `report.py`.** Every ZAR figure is rounded to cents
+from its own full-precision value; a site's invoice total is rounded from the full-precision
+*sum*, so displayed per-bucket cells may differ from the total by a cent (footnoted in the
+summary). kWh cells are displayed at 3 dp in markdown; both CSVs carry full precision.
+
+**D25 — Config↔feed reconciliation at the pipeline level.** A configured meter with no data is
+structural (a site cannot be billed on nothing) → exit 2. An unconfigured meter present in the
+data is a *finding* (`unconfigured_meter`, warning) and is ignored for billing — data problems
+report and continue. The billed-energy-by-flag split in the summary comes from grouping each
+site's allocated energy by its quality flags, so an invoice can be defended row by row.

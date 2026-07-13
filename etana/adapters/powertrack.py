@@ -35,6 +35,8 @@ CONTRACT = FeedContract(
     delimiter=";",
 )
 
+FILE_GLOB = "powertrack_*.csv"  # provider file naming is a provider quirk too
+
 _COLUMNS = {"serial": "meter_id", "reading_date": "date", "reading_time": "time", "kw": "kw"}
 
 _RAW_STEP = pd.Timedelta(minutes=CONTRACT.interval_minutes)
@@ -77,7 +79,7 @@ def _aggregate(group: pd.DataFrame, meter: str, findings: list | None) -> pd.Dat
 
 def load(path: Path, grid: pd.DatetimeIndex, findings: list | None = None) -> dict[str, pd.DataFrame]:
     """Read the PowerTrack file and land each meter on the canonical grid."""
-    frame = read_feed_csv(path, CONTRACT, required=list(_COLUMNS)).rename(columns=_COLUMNS)
+    frame = read_feed_csv(path, CONTRACT, list(_COLUMNS), findings).rename(columns=_COLUMNS)
 
     # Day-first split columns; naive local time -> localise to the canonical
     # zone (the feed is already SAST, so no conversion, just attachment).
